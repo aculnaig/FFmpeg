@@ -128,6 +128,7 @@ extern const struct ogg_codec ff_speex_codec;
 extern const struct ogg_codec ff_theora_codec;
 extern const struct ogg_codec ff_vorbis_codec;
 extern const struct ogg_codec ff_vp8_codec;
+extern const struct ogg_codec ff_kate_codec;
 
 /**
  * Parse Vorbis comments

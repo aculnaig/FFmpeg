@@ -57,6 +57,7 @@ static const struct ogg_codec * const ogg_codecs[] = {
     &ff_ogm_audio_codec,
     &ff_ogm_text_codec,
     &ff_ogm_old_codec,
+    &ff_kate_codec,
     NULL
 };
 

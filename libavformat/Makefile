@@ -424,6 +424,7 @@ OBJS-$(CONFIG_OGG_DEMUXER)               += oggdec.o         \
                                             oggparsecelt.o   \
                                             oggparsedirac.o  \
                                             oggparseflac.o   \
+                                            oggparsekate.o   \
                                             oggparseogm.o    \
                                             oggparseopus.o   \
                                             oggparseskeleton.o \
