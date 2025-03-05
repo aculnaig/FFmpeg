@@ -44,7 +44,7 @@ static uint64_t parse_kate_gptopts(AVFormatContext *s, int idx, uint64_t gp, int
 const struct ogg_codec ff_kate_codec = {
     .magic = "\200kate\0\0\0",
     .magicsize = 8,
-    .header = parse_kate_keader,
+    .header = parse_kate_header,
     .packet = parse_kate_packet,
     .gptopts = parse_kate_gptopts,
     .nb_header = 1,
