@@ -22,10 +22,50 @@
 
 #include "avformat.h"
 #include "http.h"
+#include "version.h"
 
 #include "libavutil/log.h"
+#include "libavutil/error.h"
 
 typedef struct WHIPContext {
     const AVClass *class;
     URLContext *url;
 } WHIPContext;
+
+static int whip_open(URLContext *h, const char *url, int flags)
+{
+    return AVERROR(ENOSYS);
+}
+
+static int whip_read(URLContext *h, unsigned char *buf, int size)
+{
+    return AVERROR(ENOSYS);
+}
+
+static int whip_write(URLContext *h, const unsigned char *buf, int size)
+{
+    return AVERROR(ENOSYS);
+}
+
+static int whip_close(URLContext *h)
+{
+    return AVERROR(ENOSYS);
+}
+
+static const AVClass whip_context_class = {
+    .class_name = "whip",
+    .item_name = av_default_item_name,
+    .version = LIBAVFORMAT_VERSION_INT,
+};
+
+const URLProtocol ff_whip_protocol = {
+    .name = "whip",
+    .url_open = whip_open,
+    .url_read = whip_read,
+    .url_write = whip_write,
+    .url_close = whip_close,
+    .priv_data_size = sizeof(WHIPContext),
+    .flags = URL_PROTOCOL_FLAG_NETWORK,
+    .priv_data_class = &whip_context_class,
+    .default_whitelist = "http,https,tcp,tls",
+};
