@@ -3655,6 +3655,12 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .name      = "ivtv_vbi",
         .long_name = NULL_IF_CONFIG_SMALL("ivtv VBI captions"),
     },
+    {
+        .id        = AV_CODEC_ID_KATE,
+        .type      = AVMEDIA_TYPE_SUBTITLE,
+        .name      = "kate",
+        .long_name = NULL_IF_CONFIG_SMALL("Kate subtitle"),
+    },
 
     /* other kind of codecs and pseudo-codecs */
     {
