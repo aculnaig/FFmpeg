@@ -23,17 +23,17 @@
 #include <ctype.h>
 
 #include "avformat.h"
-#include "avlanguage.h"
 #include "oggdec.h"
 #include "version.h"
 
 #include "libavcodec/bytestream.h"
+#include "libavutil/dict.h"
 #include "libavutil/error.h"
 #include "libavutil/mem.h"
-#include "libavutil/dict.h"
 
 typedef struct OggKateDemuxerContext {
     const AVClass *class;
+    char magic[7];
     int major, minor;
     uint32_t gps_num;
     uint32_t gps_den;
@@ -76,8 +76,10 @@ static int parse_kate_header(AVFormatContext *s, int idx)
                 return AVERROR_INVALIDDATA;
             }
 
-            if (strncmp(buffer, "kate\0\0\0", 7)) {
-                av_log(s, AV_LOG_ERROR, "Invalid Kate BOS header signature: (%7s)\n", buffer);
+            bytestream_get_buffer(&buffer, kate_ctx->magic, 7);
+
+            if (strncmp(kate_ctx->magic, "kate\0\0\0", 7)) {
+                av_log(s, AV_LOG_ERROR, "Invalid Kate BOS header signature: (%7s)\n", kate_ctx->magic);
                 return AVERROR_INVALIDDATA;
             }
 
@@ -109,12 +111,12 @@ static int parse_kate_header(AVFormatContext *s, int idx)
             bytestream_get_buffer(&buffer, kate_ctx->category, 16);
 
             if (kate_ctx->major > 0) {
-                av_log(s, AV_LOG_ERROR, "Unsupported Kate major version: (%d)\n", kate_ctx->major);
+                av_log(s, AV_LOG_ERROR, "Unsupported Kate bitstream major version: (%d)\n", kate_ctx->major);
                 return AVERROR_INVALIDDATA;
             }
 
-            if (kate_ctx->minor > 4) {
-                av_log(s, AV_LOG_ERROR, "Unsupported Kate minor version: (%d)\n", kate_ctx->minor);
+            if (kate_ctx->minor > 7) {
+                av_log(s, AV_LOG_ERROR, "Unsupported Kate bitstream minor version: (%d)\n", kate_ctx->minor);
                 return AVERROR_INVALIDDATA;
             }
 
@@ -147,13 +149,6 @@ static int parse_kate_header(AVFormatContext *s, int idx)
             st->codecpar->codec_id = AV_CODEC_ID_KATE;
             st->time_base.num = kate_ctx->gps_den;
             st->time_base.den = kate_ctx->gps_num;
-
-            if (kate_ctx->language[0]) {
-                const char primary_tag[3] = { tolower(kate_ctx->language[0]), tolower(kate_ctx->language[1]), '\0'};
-                const char *iso6392 = ff_convert_lang_to(primary_tag, AV_LANG_ISO639_2_BIBL);
-                if (iso6392)
-                    av_dict_set(&s->metadata, "language", iso6392, 0);
-            }
 
             return 1;
         case 0x81:
