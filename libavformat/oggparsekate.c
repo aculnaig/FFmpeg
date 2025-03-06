@@ -25,10 +25,62 @@
 
 #include "libavcodec/bytestream.h"
 #include "libavutil/error.h"
+#include "libavutil/mem.h"
+
+typedef struct OggKateDemuxerContext {
+    AVClass *class;
+} OggKateDemuxerContext;
 
 static int parse_kate_header(AVFormatContext *s, int idx)
 {
-    return AVERROR(ENOSYS);
+    struct ogg *ogg = s->priv_data;
+    struct ogg_stream *os = ogg->streams + idx;
+    AVStream *st = s->streams[idx];
+    OggKateDemuxerContext *kate_ctx = os->private;
+    int packet_type = 0;
+    uint8_t *buffer = os->buf;
+
+    if (!kate_ctx) {
+        kate_ctx = av_mallocz(sizeof(*kate_ctx));
+        if (!kate_ctx)
+            return AVERROR(ENOMEM);
+        os->private = kate_ctx;
+    }
+
+    packet_type = bytestream_get_byte(&buffer);
+
+    switch (packet_type) {
+        case 0x80:
+            st->codecpar->codec_type = AVMEDIA_TYPE_SUBTITLE;
+            st->codecpar->codec_id = AV_CODEC_ID_KATE;
+            return 1;
+        case 0x81:
+            return 1;
+        case 0x82:
+            return 1;
+        case 0x83:
+            return 1;
+        case 0x84:
+            return 1;
+        case 0x85:
+            return 1;
+        case 0x86:
+            return 1;
+        case 0x87:
+            return 1;
+        case 0x88:
+            return 1;
+        case 0x00:
+            return 0;
+        case 0x01:
+            return 0;
+        case 0x02:
+            return 0;
+        case 0x7F:
+            return 0;
+        default:
+            return AVERROR_INVALIDDATA;
+    }
 }
 
 static int parse_kate_packet(AVFormatContext *s, int idx)
