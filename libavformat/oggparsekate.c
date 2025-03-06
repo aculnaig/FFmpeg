@@ -20,15 +20,34 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include <ctype.h>
+
 #include "avformat.h"
+#include "avlanguage.h"
 #include "oggdec.h"
+#include "version.h"
 
 #include "libavcodec/bytestream.h"
 #include "libavutil/error.h"
 #include "libavutil/mem.h"
+#include "libavutil/dict.h"
 
 typedef struct OggKateDemuxerContext {
-    AVClass *class;
+    const AVClass *class;
+    int major, minor;
+    uint32_t gps_num;
+    uint32_t gps_den;
+    int granule_shift;
+
+    int canvas_width;
+    int canvas_height;
+
+    int num_headers;
+    int text_encoding;
+    int directionality;
+
+    char language[16];
+    char category[16];
 } OggKateDemuxerContext;
 
 static int parse_kate_header(AVFormatContext *s, int idx)
@@ -38,7 +57,8 @@ static int parse_kate_header(AVFormatContext *s, int idx)
     AVStream *st = s->streams[idx];
     OggKateDemuxerContext *kate_ctx = os->private;
     int packet_type = 0;
-    uint8_t *buffer = os->buf;
+    uint16_t canvas_shift = 0;
+    uint8_t *buffer = os->buf + os->pstart;
 
     if (!kate_ctx) {
         kate_ctx = av_mallocz(sizeof(*kate_ctx));
@@ -51,8 +71,90 @@ static int parse_kate_header(AVFormatContext *s, int idx)
 
     switch (packet_type) {
         case 0x80:
+            if (os->psize < 63) {
+                av_log(s, AV_LOG_ERROR, "Invalid Kate BOS header size: (%u)\n", os->psize);
+                return AVERROR_INVALIDDATA;
+            }
+
+            if (strncmp(buffer, "kate\0\0\0", 7)) {
+                av_log(s, AV_LOG_ERROR, "Invalid Kate BOS header signature: (%7s)\n", buffer);
+                return AVERROR_INVALIDDATA;
+            }
+
+            (void) bytestream_get_byte(&buffer); // reserved (0 byte)
+
+            kate_ctx->major = bytestream_get_byte(&buffer);
+            kate_ctx->minor = bytestream_get_byte(&buffer);
+
+            kate_ctx->num_headers = bytestream_get_byte(&buffer);
+            kate_ctx->text_encoding = bytestream_get_byte(&buffer);
+            kate_ctx->directionality = bytestream_get_byte(&buffer);
+
+            (void) bytestream_get_byte(&buffer); // reserved (0 byte)
+
+            kate_ctx->granule_shift = bytestream_get_byte(&buffer);
+
+            canvas_shift = bytestream_get_le16(&buffer);
+            kate_ctx->canvas_width = (canvas_shift & ((1 << 12) - 1)) << (canvas_shift >> 12);
+
+            canvas_shift = bytestream_get_le16(&buffer);
+            kate_ctx->canvas_height = (canvas_shift & ((1 << 12) - 1)) << (canvas_shift >> 12);
+
+            (void) bytestream_get_byte(&buffer); // reserved (0 byte)
+
+            kate_ctx->gps_num = bytestream_get_le32(&buffer);
+            kate_ctx->gps_den = bytestream_get_le32(&buffer);
+
+            bytestream_get_buffer(&buffer, kate_ctx->language, 16);
+            bytestream_get_buffer(&buffer, kate_ctx->category, 16);
+
+            if (kate_ctx->major > 0) {
+                av_log(s, AV_LOG_ERROR, "Unsupported Kate major version: (%d)\n", kate_ctx->major);
+                return AVERROR_INVALIDDATA;
+            }
+
+            if (kate_ctx->minor > 4) {
+                av_log(s, AV_LOG_ERROR, "Unsupported Kate minor version: (%d)\n", kate_ctx->minor);
+                return AVERROR_INVALIDDATA;
+            }
+
+            if (kate_ctx->text_encoding != 0) {
+                av_log(s, AV_LOG_ERROR, "Unsupported Kate text encoding: (%d)\n", kate_ctx->text_encoding);
+                return AVERROR_INVALIDDATA;
+            }
+
+            if (kate_ctx->granule_shift >= 64) {
+                av_log(s, AV_LOG_ERROR, "Invalid Kate granule shift: (%d)\n", kate_ctx->granule_shift);
+                return AVERROR_INVALIDDATA;
+            }
+
+            if (kate_ctx->gps_num == 0 || kate_ctx->gps_den == 0) {
+                av_log(s, AV_LOG_ERROR, "Invalid Kate GPS ratio: (%u/%u)\n", kate_ctx->gps_num, kate_ctx->gps_den);
+                return AVERROR_INVALIDDATA;
+            }
+
+            if (kate_ctx->language[15]) {
+                av_log(s, AV_LOG_ERROR, "Invalid Kate language: (%15s)\n", kate_ctx->language);
+                return AVERROR_INVALIDDATA;
+            }
+
+            if (kate_ctx->category[15]) {
+                av_log(s, AV_LOG_ERROR, "Invalid Kate category: (%15s)\n", kate_ctx->category);
+                return AVERROR_INVALIDDATA;
+            }
+
             st->codecpar->codec_type = AVMEDIA_TYPE_SUBTITLE;
             st->codecpar->codec_id = AV_CODEC_ID_KATE;
+            st->time_base.num = kate_ctx->gps_den;
+            st->time_base.den = kate_ctx->gps_num;
+
+            if (kate_ctx->language[0]) {
+                const char primary_tag[3] = { tolower(kate_ctx->language[0]), tolower(kate_ctx->language[1]), '\0'};
+                const char *iso6392 = ff_convert_lang_to(primary_tag, AV_LANG_ISO639_2_BIBL);
+                if (iso6392)
+                    av_dict_set(&s->metadata, "language", iso6392, 0);
+            }
+
             return 1;
         case 0x81:
             return 1;
@@ -92,6 +194,13 @@ static uint64_t parse_kate_gptopts(AVFormatContext *s, int idx, uint64_t gp, int
 {
     return AV_NOPTS_VALUE;
 }
+
+const AVClass ff_kate_demuxer_class = {
+    .class_name = "oggkate",
+    .category = AV_CLASS_CATEGORY_DEMUXER,
+    .item_name = av_default_item_name,
+    .version = LIBAVFORMAT_VERSION_INT,
+};
 
 const struct ogg_codec ff_kate_codec = {
     .magic = "\200kate\0\0\0",
